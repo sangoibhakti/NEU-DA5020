@@ -1,0 +1,214 @@
+---
+title: "Assignment 4"
+author: "Bhakti Sangoi"
+date: "February 8, 2018"
+output:
+  word_document: default
+  pdf_document: default
+  html_document: default
+---
+
+#GitHub
+- https://github.com/sangoibhakti/NEU-DA5020.git
+
+#Reading Libraries
+```{r}
+library(tidyverse)
+library(readxl)
+library(stringr)
+library(forcats)
+library(ggthemes)
+```
+
+#Reading Datasets
+```{r}
+farmers_market <-read_csv("farmers_market.csv") #Reading Farmers market dataset
+kyfp <- read_excel("kyfprojects.xls") #Reading Know your farmers and Know your food project
+```
+
+#Warm-up
+This dataset stores city and state in different columns, what if you want to
+print out city and state in the format "City, State"?
+```{r}
+CityState_frmt = str_c(farmers_market$city, ', ',farmers_market$State) #Combine City,State
+```
+
+#Question 1:
+Cleanup the Facebook and Twitter column to let them contain only the facebook username or twitter handle name.
+- replace "https://www.facebook.com/pages/Cameron-Park-Farmers-Market/97634216535?ref=hl" with "Cameron-Park-Farmers-Market", 
+-"@21acres" with "21acres
+
+```{r}
+fm_fb <- select(farmers_market, Facebook) 
+fm_vec <- as_vector( fm_fb) #Creating a vector
+df1 <- data_frame(facebook = character())
+# Clean up for Facebook
+    for(x in 1:NROW(fm_vec))  #forming For loop to check each pattern with per data
+    {
+      p= fm_vec[[x]]
+      a1 = 'https:[/][/]www.facebook.com[/]pages[/]'
+      b1 = 'https:[/][/]www.facebook.com[/]'
+      c1 = 'www.facebook.com[/]'
+      d1 = 'facebook.com[/]'
+      e1 = 'facebook[/]'
+      f1 = 'www.facebook.com[/]pages[/]'
+      g1 = 'https:[/][/]www.'
+      h1 = 'www.'
+          ss1 =if(grepl(a1,p)==TRUE){gsub(a1, "", p)}
+          else if(grepl(b1,p)==TRUE){gsub(b1, "", p)}
+          else if(grepl(c1,p)==TRUE){gsub(c1, "", p)}
+          else if(grepl(d1,p)==TRUE){gsub(d1, "", p)}
+          else if(grepl(e1,p)==TRUE){gsub(e1, "", p)}
+          else if(grepl(f1,p)==TRUE){gsub(f1, "", p)}
+          else if(grepl(g1,p)==TRUE){gsub(g1, "", p)}
+          else if(grepl(h1,p)==TRUE){gsub(h1, "", p)}
+          else {p}
+      df1[x, ]=ss1
+    }
+Facebook_username <- data_frame(gsub("/.*","",as.character(df1$facebook)))
+Facebook_username #displaying facebook username
+farmers_market$Facebook <- Facebook_username
+
+#Clean up for Twitter
+fm_twit <- select(farmers_market, Twitter)
+fmt_vec <- as_vector(fm_twit) #Creating a vector
+df2 <- data_frame(twitter = character())
+    for(x in 1:NROW(fmt_vec)) #forming For loop to check each pattern with per data
+    {
+        q= fmt_vec[[x]]
+        m1 = 'https:[/][/]twitter.com[/]'
+        n1 = 'www.twitter.com'
+        l1 = '@'
+            tt1 =if(grepl(m1,q)==TRUE){gsub(m1, "", q)}
+            else if(grepl(n1,q)==TRUE){gsub(n1, "", q)}
+            else if(grepl(l1,q)==TRUE){gsub(l1, "", q)}
+            else {q}
+        df2[x, ] = tt1
+    }
+df2 #displaying the twitter username
+farmers_market$Twitter <- df2
+
+
+```
+
+#Question 2:
+Clean up the `city` and `street` column. Remove state and county names from the `city` column and consolidate address spellings to be more consistent (e.g. "St.", "ST.", "Street" all become "St"; "and" changes to "&", etc...).
+```{r}
+#Cleaning Street
+farmers_market <- farmers_market %>% 
+  mutate(
+          street = street %>% 
+            str_replace_all(c( "\\b(and)\\b" = "&", #Replace 'and' by '&'
+                               "\\bAve?(\\.|\\b)" = "Avenue", #Replacing 'Ave' by 'Avenue'
+                               "\\bBlvd(\\.|\\b)" = "Boulevard" #Replacing 'Blvd' by       'Boulevard'
+                          ))
+        )
+
+farmers_market$street <-gsub("(St|st|Sts.|Street|Streets|street|streets)","Street",farmers_market$street) #Replacing all matches of street like Street/st/sts./ by "Street"
+farmers_market$street
+
+#Cleaning City
+farmers_market$city <- gsub(",\\s([A-z]|[a-z]){2}","",farmers_market$city)
+farmers_market$city
+```
+
+#Question 3:
+Create a new data frame (tibble) that explains the online presence of each state's farmers market. I.e., how many percentages of them have a facebook account? A twitter account? Or either of the accounts? (Hint: use the `is.na()` function)
+```{r}
+farmers_percentage<- farmers_market %>% 
+                     group_by(State) %>% #Group by State 
+                    #Summarize columns to find percentage of accounts by State
+                     summarise(FaceBook = ((sum(!is.na(Facebook)))/n())*100, 
+                     Twitter = ((sum(!is.na(Twitter)))/n())*100,
+                     Youtube= ((sum(!is.na(Youtube)))/n())*100,
+                     Website = ((sum(!is.na(Website)))/n())*100,
+                     Other = ((sum(!is.na(OtherMedia)))/n())*100)
+farmers_percentage
+```
+
+#Question 4:
+Some of the farmer market names are quite long. Can you make them shorter by using the `forcats::fct_recode` function? Create a plot that demonstrates the number of farmers markets per location type. The locations should be ordered in descending order where the top of the graph will have the one with the highest number of markets.
+```{r}
+farmers_market<-farmers_market %>% 
+                        as_tibble()%>%
+                        mutate(Abbr_Location =  #Using mutate to create the new column and                                                  keeping the old location as it is
+                                 recode(Location,
+  "Faith-based institution (e.g., church, mosque, synagogue, temple)"= "Religional Inst.",
+  "Closed-off public street" = "Public St.",
+  "Private business parking lot" = "Private Parking",
+  "Local government building grounds" = "Local Govnt.",
+  "Federal/State government building grounds" = "Federal_Govnt Bld.",
+  "Educational institution" = "Education Inst.",
+  "Healthcare Institution" = "Health Inst.",
+  "On a farm from: a barn, a greenhouse, a tent, a stand, etc" = "On_Farm",
+  "Co-located with wholesale market facility"= "Wholesale Market" 
+    )) 
+
+farmers_market$Abbr_Location #A new column with Abbreviated location is created.
+
+Farmersmarket_location <- farmers_market %>% 
+                          group_by(Abbr_Location) %>% #Group by Abbreviated Location 
+                          count(Abbr_Location) %>%
+                          filter(!is.na(Abbr_Location)) # Remove NA's
+
+#Demonstarting Number of Farmers Market by Abbreviated Location
+ggplot(data=Farmersmarket_location, mapping=aes(y=reorder(Abbr_Location,n),x=n)) +
+geom_point()
+```
+
+#Question 5:
+Write code to sanity check the `kyfprojects` data. For example, does `Program Abbreviation` always match `Program Name` for all the rows? (Try thinking of your own rules, too.)
+```{r}
+
+#Does Program Abbreviation always match Program Name
+unique(kyfp$`Program Name`) #21 Entries
+unique(kyfp$`Program Abbreviation`) #19 Entries
+
+#The unique no. of Program Name does not match with Program Abbreviation, hence it fails the sanity test.
+
+#Kyfp dataset consists of 2379 values
+
+#Generating additional rules
+
+#Year has only digits
+year_digits <- grepl("^[[:digit:]]*$",kyfp$Year)
+count_dig <- sum(year_digits < 7) #Gives the count for values satisfying above rule.
+count_dig
+#It satisfies the rule
+
+#Zipcode is only numeric
+zip1<-grepl("^[0-9]+$",kyfp$Zip)
+count_zip1<-sum(zip1<7) #Gives the count for values satisfying above rule
+count_zip1
+#It satisfies the rule
+
+#Zipcode has only 5 digits
+zip2<-grepl("\\d{5,}",kyfp$Zip)
+count_zip2<-sum(zip2<7) #Gives the count for values satisfying above rule
+count_zip2
+#It satisfies the rule
+
+#Check if USDA Agency has characters
+usda_char <- grepl("[A-Z]", kyfp$`USDA Agency`)
+count_usda <- sum(usda_char < 7) #Gives the count for values satisfying above rule
+count_usda
+#It satisfies the rule
+
+#State has only 2 characters
+state2<-nchar(kyfp$State)
+count_state2<-sum(state2<7) #Gives the count for values satisfying above rule
+count_state2
+#It satisfies the rule
+
+#Recipient has all alphabets
+rec <- grepl("[A-Z]", kyfp$Recipient)
+count_rec <-sum(rec < 7) #Gives the count for values satisfying above rule
+count_rec
+#It satisfies the rule
+
+#Funding type has alphabets
+fund_type <-grepl("[A-Z]",kyfp$`Funding Type`)
+count_ft <-sum(fund_type < 7) #Gives the count for values satisfying above rule
+count_ft
+#It satisfies the rule
+```
