@@ -1,0 +1,191 @@
+---
+title: "Assignment 5"
+author: "Bhakti Sangoi"
+date: "February 10, 2018"
+output:
+  pdf_document: default
+  html_document: default
+  word_document: default
+---
+
+#GitHub
+- https://github.com/sangoibhakti/NEU-DA5020.git
+
+#Reading Libraries
+```{r}
+library(tidyverse)
+library(stringr)
+library(readxl)
+library(lubridate)
+```
+
+#Reading Farmers Market and Kyfprojects Dataset
+```{r}
+farmers_market <-read_csv("farmers_market.csv") #Reading Farmers market dataset
+kyfp<- read_excel("kyfprojects.xls") #Reading Kyfproject dataset
+```
+
+#Question 1:
+Add a new column `Season1Days` that contains the number of days a market is opened per week (for the dates it is open).
+```{r}
+#used str_count function: to count the number of days market is open and create a new column per season to store the result
+farmers_market$Season1Days<-str_count(farmers_market$Season1Time,";")
+farmers_market$Season1Days
+farmers_market$Season2Days<-str_count(farmers_market$Season2Time,";")
+farmers_market$Season2Days
+farmers_market$Season3Days<-str_count(farmers_market$Season3Time,";")
+farmers_market$Season3Days
+farmers_market$Season4Days<-str_count(farmers_market$Season4Time,";")
+farmers_market$Season4Days
+```
+
+#Question 2:
+Add a new column `WeekendOpen` indicating whether a market opens during weekends in `Season1.
+```{r}
+#To find if market is open on weekend by using grepl 
+farmers_market$WeekendOpen<-grepl("Sat|Sun",farmers_market$Season1Time)
+#WeekendOpen counts
+str_count(farmers_market$WeekendOpen,"TRUE")
+Weekend_Open_TotalCount <- sum(str_count(farmers_market$WeekendOpen,"TRUE"))
+Weekend_Open_TotalCount
+#3191 farmers market are open in Season 1.
+```
+
+#Question 3:
+Find out which markets close before 6PM, and which open only for fewer than 4 hours a day. For simplicity, consider only `Season1Time`. For markets with different open hours across a week, use the average length of open hours for the days they actually open.
+```{r}
+
+#Selecting Market Name AND Season 1 from dataset
+n <- farmers_market %>% select(MarketName,Season1Time) 
+p1 <-str_replace_all(n$Season1Time,"^[A-Za-z:]+[ ]|^[A-Za-z]+[:]","")
+q1 <- str_replace(p1,";","") #clean-up data and fetching time
+#View(as.data.frame(q1))
+#extracting start time
+r1 <- str_extract(p1,"^[0-9]+[:][0-9]+[ ][A-Za-z]+") 
+#View(as.data.frame(r1))
+parse_date_time(r1, "%I:%M %p") #Setting it in a date-time format using parse
+
+#extrating end time
+s1 <- str_extract(q1 , "[0-9]+[:][0-9]+[ ][A-Za-z]+$")
+#View(as.data.frame(s1)) 
+parse_date_time(s1, "%I:%M %p")  #Setting it in a date-time format using parse
+n$Season1Time <- q1
+
+#Constaint that market closes before 6.00PM
+constraint <- parse_time("6:00 PM")
+
+#Adding Start and End time column
+start_endtime<-mutate(n , begin = r1, end = s1)
+
+#Displaying Season1Time, StartTime and EndTime
+final_markettime <- filter(start_endtime, abs(parse_time(begin)-parse_time(end)) < 14400, parse_time(end) < constraint)
+final_markettime
+```
+
+#Question 4:
+The seasons are not standardized and would make analysis difficult. Create four new columns for four seasons (Spring, Summer, Fall, Winter), indicating whether a market is available in that season. Also, create two additional columns `HalfYear` and `YearRound` to identify those who open across seasons. Define "half year" and "year round" on your own terms, but explain them before you write the code (or as comments in your code). (Hint: you may want to create even more auxiliary columns, `Season1BeginDate` and `Season1EndDate` for example.)
+
+```{r}
+#Defining:
+##Year_Round: Farmers market is open throughout the year considering for Season 1. 
+##Half_Year: Farmers market is open from start date of Season 1 for 6 months span.
+
+#Clean-up data
+farmers_market$Season1Date <- str_replace_all(farmers_market$Season1Date, c("January"="01/01/2015","February"="02/01/2015","March"="03/01/2015","April"="04/01/2015",   "May"="05/01/2015","July"="07/01/2015", "June"="06/01/2015","August"="08/01/2015",         "September"="09/01/2015","October"="10/01/2015","November"="11/01/2015","December"="12/01/2015"))
+
+#Cleaning Season 1 Start Date
+Season1_Start <- str_extract(farmers_market$Season1Date,"^[0-9]+[/][0-9]+[/][0-9]+")
+
+#Cleaning Season 1 End Date
+Season1_End <- str_extract(farmers_market$Season1Date,"[0-9]+[/][0-9]+[/][0-9]+$")
+
+#Replacing Date with year
+s1 <- str_replace(Season1_Start,"[0-9]+$","2017")
+s1 <- parse_date(s1, "%m/%d/%Y")
+e1 <- str_replace(Season1_End,"[0-9]+$","2017")
+e1 <- parse_date(e1 , "%m/%d/%Y")
+
+# create date ranges for the four seasons
+Winter_Start <- as.Date("2017-12-01")
+Spring_Start <- as.Date("2017-03-01")
+Summer_Start <- as.Date("2017-06-01")
+Fall_Start   <- as.Date("2017-09-01")
+#Intervals
+winter_season <- interval(Winter_Start, Spring_Start + years(1))
+spring_season <- interval(Spring_Start,Summer_Start)
+summer_season <- interval(Summer_Start,Fall_Start)
+fall_season   <- interval(Fall_Start,Winter_Start)
+Half_Year <- interval(s1, s1+months(6) )
+Year_Round <- interval(Winter_Start, Fall_Start+months(3) )
+winter_season
+spring_season
+summer_season
+fall_season
+
+farmers_market<- farmers_market %>% mutate(
+      
+                Season1_startdate = s1,
+                Season1_enddate = e1,
+                # consider all dates to be of the same year, along with end of the year    situation
+                Season1_enddate = if_else(Season1_enddate < Season1_startdate,
+                                Season1_enddate + years(1),
+                                Season1_enddate),
+                Season1_span = interval(Season1_startdate, Season1_enddate),
+                #returning True/False using int_overlaps
+                winter_season = int_overlaps(Season1_span, winter_season),
+                spring_season = int_overlaps(Season1_span,spring_season),
+                summer_season = int_overlaps(Season1_span,summer_season),
+                fall_season = int_overlaps(Season1_span, fall_season),
+                Year_Round = int_overlaps(Season1_span,Year_Round),
+                Half_Year = int_overlaps(Season1_span,Half_Year)
+                )
+
+View(farmers_market)
+```
+
+#Question 5:
+_Open question_: explore the new variables you just created. Aggregate them at different geographic levels, or some other categorical variable. What can you discover?
+```{r}
+#using coord_flip: Flipping cartesian coordinates X and Y axis along with geom_bar to make height of the bar proportional to no. of cases in each group.
+
+
+##A)Farmers Market is open maximum number of days in the state of California followed by the state of New York
+ggplot(data = farmers_market)+
+geom_bar(mapping = aes(x = State, fill = Season1Days))+
+coord_flip()
+
+##B)In Fall, maximum markets are open in different states
+ggplot(data = farmers_market)+
+geom_bar(mapping = aes(x = State, fill = fall_season))+
+coord_flip()
+
+##C)In Spring, maximum markets are open in different states
+ggplot(data = farmers_market)+
+  geom_bar(mapping = aes(x = State, fill = spring_season))+
+  coord_flip()
+
+##D)In Summer, maximum markets are open in different states
+ggplot(data = farmers_market)+
+geom_bar(mapping = aes(x = State,fill = summer_season))+
+coord_flip()
+
+##E)In Winter, maximum markets are closed in different states
+ggplot(data = farmers_market)+
+geom_bar(mapping = aes(x = State, fill = winter_season))+
+coord_flip()
+
+##F)Different States have farmers market open and closed based on seasons based on Year round analysis
+ggplot(data = farmers_market)+
+  geom_bar(mapping = aes(x = State, fill = Year_Round))+
+  coord_flip()
+
+##G)For half year markets are open most of the time in a particular time frame.
+ggplot(data = farmers_market)+
+  geom_bar(mapping = aes(x = State, fill = Half_Year))+
+  coord_flip()
+
+##H)Statistical Analysis is done on which state has the high and low number of farmers market Open on Weekends.
+ggplot(data = farmers_market)+
+geom_bar(mapping = aes(x = State, fill = WeekendOpen))+
+coord_flip()
+```
